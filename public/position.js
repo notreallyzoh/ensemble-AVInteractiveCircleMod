@@ -219,7 +219,11 @@ const Ranger = {
       if (!solved) throw new Error('Not enough clear chirps — try again somewhere quieter');
       this.map = solved;
       return solved;
-    } finally { this.running = false; }
+    } finally {
+      this.running = false;
+      Acoustic.close();
+      Net.send({ t: 'relay', to: '*', payload: { k: 'ranging-done' } });
+    }
   },
 
   /** Measure this device's own speaker→mic loop, and say so either way. */

@@ -6,6 +6,7 @@
 'use strict';
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -14,12 +15,20 @@ const os = require('os');
 const PORT = Number(process.env.PORT || 8080);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_UPLOAD = 200 * 1024 * 1024; // 200 MB
+const TLS = process.env.TLS_CERT && process.env.TLS_KEY ? {
+  cert: fs.readFileSync(process.env.TLS_CERT), key: fs.readFileSync(process.env.TLS_KEY),
+} : null;
+if (!!process.env.TLS_CERT !== !!process.env.TLS_KEY) throw new Error('Set both TLS_CERT and TLS_KEY for HTTPS.');
+const SCHEME = TLS ? 'https' : 'http';
 
 // Monotonic server clock in float milliseconds. Every device syncs to this.
 const hrBase = process.hrtime.bigint();
 const now = () => Number(process.hrtime.bigint() - hrBase) / 1e6;
 
 const RoomCore = require('./public/room-core.js');
+const ShowCore = require('./public/show-core.js');
+const tokenFile = path.join(__dirname, '.local', 'diagnostics-token');
+const diagnosticsKey = process.env.DIAGNOSTICS_KEY || (fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, 'utf8').trim() : '');
 
 /* ------------------------------------------------------------------ rooms */
 
@@ -225,9 +234,16 @@ function lanAddresses() {
   return out;
 }
 
-const server = http.createServer((req, res) => {
+const requestHandler = (req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
+  if (url.pathname === '/api/diagnostics') {
+    const supplied = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    const hash = s => crypto.createHash('sha256').update(s).digest();
+    if (!diagnosticsKey || !crypto.timingSafeEqual(hash(supplied), hash(diagnosticsKey))) return sendJSON(res, 401, { error: 'Unauthorized' });
+    const room = rooms.get((url.searchParams.get('room') || '').toUpperCase());
+    return sendJSON(res, room ? 200 : 404, room ? ShowCore.report(room, now()) : { error: 'Room not found' });
+  }
   if (url.pathname === '/api/info') {
     return sendJSON(res, 200, { port: PORT, addresses: lanAddresses(), serverNow: now() });
   }
@@ -286,7 +302,8 @@ const server = http.createServer((req, res) => {
   }
 
   serveStatic(req, res);
-});
+};
+const server = TLS ? https.createServer(TLS, requestHandler) : http.createServer(requestHandler);
 
 /* ------------------------------------------------------- ws room protocol */
 
@@ -368,7 +385,7 @@ setInterval(() => {
 server.listen(PORT, () => {
   const addrs = lanAddresses();
   console.log('\n  Ensemble is running\n');
-  console.log(`  On this device   http://localhost:${PORT}`);
-  for (const a of addrs) console.log(`  On your network  http://${a}:${PORT}`);
+  console.log(`  On this device   ${SCHEME}://localhost:${PORT}`);
+  for (const a of addrs) console.log(`  On your network  ${SCHEME}://${a}:${PORT}`);
   console.log('\n  Open the first link, start a session, then join from other devices\n  on the same Wi-Fi with the 4-character code.\n');
 });

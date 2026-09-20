@@ -214,26 +214,19 @@ const Net = {
   onStatus: () => {},
 
   /**
-   * LAN when a Node server answers, peer-to-peer otherwise (e.g. GitHub Pages).
-   * Only a local address is probed — a public host is never running this
-   * server, and the probe would just log a 404. Force it with ?mode=ws.
+   * Discover the LAN or Cloudflare room service; static hosting uses P2P.
    */
   async detectMode() {
     if (/[?&]mode=p2p/.test(location.search)) return 'p2p';
-    if (/[?&]mode=ws/.test(location.search)) return 'ws';
     if (location.protocol === 'file:') return 'p2p';
-    const h = location.hostname;
-    const localish = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(h) ||
-      /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h) || /\.local$/.test(h);
-    if (!localish) return 'p2p';
     try {
       const ctl = new AbortController();
       const timer = setTimeout(() => ctl.abort(), 1500);
       const res = await fetch('api/info', { signal: ctl.signal });
       clearTimeout(timer);
-      if (res.ok && (res.headers.get('content-type') || '').includes('json')) return 'ws';
+      if (res.ok && (res.headers.get('content-type') || '').includes('json')) { this.info = await res.json(); return 'ws'; }
     } catch {}
-    return 'p2p';
+    return /[?&]mode=ws/.test(location.search) ? 'ws' : 'p2p';
   },
 
   async start(opts) {
@@ -242,9 +235,14 @@ const Net = {
   },
 
   /* ── LAN ── */
-  startWS(opts) {
+  async startWS(opts) {
+    if (this.info?.cloud && opts.create) {
+      const res = await fetch('/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: opts.key }) });
+      if (!res.ok) throw new Error('Could not create room');
+      opts.code = (await res.json()).code;
+    }
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const link = new WSLink(`${proto}://${location.host}/ws`);
+    const link = new WSLink(`${proto}://${location.host}/ws${this.info?.cloud ? `?room=${encodeURIComponent(opts.code)}` : ''}`);
     this.link = link;
     link.ws.onopen = () => {
       this.onStatus('connected');
@@ -486,6 +484,7 @@ const Net = {
         const xhr = new XMLHttpRequest();
         const q = new URLSearchParams({ room: this.code || App.room.code, device: App.id, name: file.name });
         xhr.open('POST', 'api/upload?' + q.toString());
+        xhr.setRequestHeader('Authorization', 'Bearer ' + App.key);
         xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
         xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
         xhr.onload = () => (xhr.status === 200 ? resolve() : reject(new Error('upload failed')));

@@ -1,0 +1,10 @@
+{
+  "name": "ensemble-stage",
+  "main": "worker/index.js",
+  "account_id": "fcca1cbe32dc6b025d0ae4af6371a079",
+  "compatibility_date": "2026-09-20",
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*", "/ws"] },
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "StageRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["StageRoom"] }],
+  "observability": { "enabled": true, "traces": { "enabled": true } }
+}

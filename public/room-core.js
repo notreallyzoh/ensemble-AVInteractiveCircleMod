@@ -13,6 +13,8 @@
 
   const CODE_ALPHABET = 'ACDEFGHJKLMNPQRTUVWXY34679';
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const spatial = typeof module === 'object' && module.exports ? require('./spatial.js') : Spatial;
+  const showCore = typeof module === 'object' && module.exports ? require('./show-core.js') : ShowCore;
 
   function makeCode(rand) {
     const r = rand || ((n) => Math.floor(Math.random() * n));
@@ -26,6 +28,8 @@
       devices: new Map(),
       track: null,          // { id, name, mime, size, url|null }
       syncBuffer: 700,
+      instrumentSeq: 0,
+      show: showCore.defaults(), diagnosticEvents: [],
       playback: { mode: 'idle', trackId: null, anchorServer: 0, anchorPos: 0, bpm: 100 },
     };
   }
@@ -46,6 +50,9 @@
       parent: null, depth: 0, hopRtt: null, slack: null, buf: null, gaps: 0,
       lastSeen: opts.joinedAt,
       pos: null,            // { x, y } metres, from the acoustic room map
+      posSource: null, instrumentReady: false, clockJitter: 0,
+      noteLate: 0, notePlayed: 0, noteSlack: null,
+      metrics: {}, visualReady: false,
     };
   }
 
@@ -58,6 +65,9 @@
       awake: d.awake, pos: d.pos, lat: d.lat, tsrc: d.tsrc,
       peerId: d.peerId, parent: d.parent, depth: d.depth, hopRtt: d.hopRtt,
       slack: d.slack, buf: d.buf, gaps: d.gaps,
+      posSource: d.posSource, instrumentReady: d.instrumentReady, clockJitter: d.clockJitter,
+      noteLate: d.noteLate, notePlayed: d.notePlayed, noteSlack: d.noteSlack,
+      metrics: d.metrics, visualReady: d.visualReady, lastSeen: d.lastSeen,
     };
   }
 
@@ -72,6 +82,7 @@
         size: room.track.size, url: room.track.url || null,
       },
       playback: room.playback,
+      show: room.show,
     };
   }
 
@@ -105,6 +116,7 @@
       device.trim = previous.trim;
       device.calib = previous.calib;
       device.pos = previous.pos;
+      device.posSource = previous.posSource;
       device.name = previous.name;
     }
     if (device.isHost) room.hostId = device.id;
@@ -125,6 +137,7 @@
   }
 
   function setTrack(room, track) {
+    room.show.running = false;
     room.track = track;
     room.playback = { mode: 'idle', trackId: track ? track.id : null, anchorServer: 0, anchorPos: 0, bpm: room.playback.bpm };
     for (const d of room.devices.values()) { d.ready = false; d.progress = 0; d.drift = 0; }
@@ -135,6 +148,7 @@
    * Returns true when the roster should be republished.
    */
   function handle(room, device, msg, ctx) {
+    if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string') return false;
     const isHost = device.id === room.hostId;
     device.lastSeen = ctx.now();
 
@@ -157,6 +171,11 @@
         num('slack', -10000, 10000);
         num('gaps', 0, 1e9);
         num('buf', 0, 5000);
+        num('clockJitter', 0, 1000); num('noteLate', 0, 1e9); num('notePlayed', 0, 1e9);
+        num('noteSlack', -10000, 10000);
+        if (typeof p.instrumentReady === 'boolean') device.instrumentReady = p.instrumentReady;
+        if (typeof p.visualReady === 'boolean') device.visualReady = p.visualReady;
+        if (p.metrics && typeof p.metrics === 'object') device.metrics = showCore.metrics(p.metrics);
         if (typeof p.peerId === 'string') device.peerId = p.peerId.slice(0, 64);
         if (typeof p.tsrc === 'string') device.tsrc = p.tsrc.slice(0, 12);
         if (typeof p.ready === 'boolean') device.ready = p.ready;
@@ -167,7 +186,7 @@
         if (typeof p.net === 'string') device.net = p.net.slice(0, 16);
         if (typeof p.name === 'string' && p.name.trim()) device.name = p.name.slice(0, 24);
         if (p.calib === null || typeof p.calib === 'number') device.calib = p.calib;
-        if (p.pos === null || (p.pos && typeof p.pos.x === 'number')) device.pos = p.pos;
+        // Placement is controlled by the host, not a participant's status packet.
         return true;
       }
 
@@ -187,7 +206,77 @@
     if (!isHost) return false;      // everything below is the host's privilege
 
     switch (msg.t) {
+      case 'show-config': {
+        const patch = showCore.config(msg.patch);
+        const timingChanged = ['bpm', 'beats', 'a', 'b', 'path', 'metronome'].some((k) => k in patch && patch[k] !== room.show[k]);
+        Object.assign(room.show, patch);
+        if (timingChanged && room.show.running) {
+          room.show.anchor = ctx.now() + Math.max(600, room.show.lead + 200);
+          room.show.revision++;
+          ctx.broadcast({ t: 'instrument-panic', seq: ++room.instrumentSeq });
+        }
+        showCore.log(room, ctx.now(), 'settings', Object.keys(patch).map((k) => `${k}=${patch[k]}`).join(', '));
+        return true;
+      }
+      case 'show-run': {
+        room.show.running = !!msg.on;
+        room.show.anchor = ctx.now() + Math.max(600, room.show.lead + 200);
+        room.show.revision++;
+        room.playback = { mode: msg.on ? 'instrument' : 'idle', trackId: null, anchorServer: ctx.now(), anchorPos: 0, bpm: room.show.bpm };
+        showCore.log(room, ctx.now(), msg.on ? 'show-start' : 'show-stop', `${room.show.a}:${room.show.b} at ${room.show.bpm} BPM`);
+        ctx.broadcast({ t: 'instrument-panic', seq: ++room.instrumentSeq });
+        ctx.broadcast({ t: 'playback', playback: room.playback, serverNow: ctx.now() });
+        return true;
+      }
+      case 'visual-cue': {
+        if (!Number.isFinite(msg.at) || msg.at < ctx.now() - 50 || msg.at > ctx.now() + 2000) return false;
+        if (device.cueAt && ctx.now() - device.cueAt < 100) return false;
+        device.cueAt = ctx.now();
+        const gains = {};
+        for (const d of room.devices.values()) if (d.visualReady && (msg.target === 'all' || msg.target === d.id)) gains[d.id] = 1;
+        ctx.broadcast({ t: 'visual-cue', seq: ++room.instrumentSeq, at: msg.at, duration: 0.8,
+          palette: Object.hasOwn(showCore.COLORS, msg.palette) ? msg.palette : room.show.palette, gains });
+        return false;
+      }
+      case 'diagnostic-mark':
+        if (['soundcheck-start', 'soundcheck-end'].includes(msg.kind)) showCore.log(room, ctx.now(), msg.kind, {});
+        return false;
+      case 'diagnostics-request':
+        ctx.send(device.id, { t: 'diagnostics-report', report: showCore.report(room, ctx.now()) });
+        return false;
+      case 'instrument-mode': {
+        room.show.running = false;
+        room.playback = { mode: msg.on ? 'instrument' : 'idle', trackId: null,
+          anchorServer: ctx.now(), anchorPos: 0, bpm: room.playback.bpm };
+        ctx.broadcast({ t: 'instrument-panic', seq: ++room.instrumentSeq });
+        ctx.broadcast({ t: 'playback', playback: room.playback, serverNow: ctx.now() });
+        return true;
+      }
+      case 'instrument-note': {
+        if (room.playback.mode !== 'instrument') return false;
+        const event = spatial.note(msg);
+        if (!event) return false;
+        if (event.at < ctx.now() + 5 || event.at > ctx.now() + 1500) {
+          ctx.send(device.id, { t: 'instrument-rejected', reason: 'deadline — increase gesture lead' });
+          return false;
+        }
+        // Bound work on every phone even if a controller floods the room.
+        if (!device.noteWindow || ctx.now() - device.noteWindow.at >= 1000) device.noteWindow = { at: ctx.now(), count: 0 };
+        if (++device.noteWindow.count > 40) return false;
+        event.gains = spatial.gains([...room.devices.values()], event.pos, event.spread);
+        event.visualGains = spatial.gains([...room.devices.values()].map((d) => ({ ...d, muted: false, instrumentReady: d.visualReady })), event.pos, event.spread);
+        event.palette = Object.hasOwn(showCore.COLORS, msg.palette) ? msg.palette : room.show.palette;
+        event.lane = Number.isInteger(msg.lane) ? Math.max(0, Math.min(2, msg.lane)) : null;
+        ctx.broadcast({ ...event, t: 'instrument-note', seq: ++room.instrumentSeq });
+        return false; // No full roster broadcast on the performance path.
+      }
+      case 'instrument-panic':
+        room.show.running = false;
+        room.show.revision++;
+        ctx.broadcast({ t: 'instrument-panic', seq: ++room.instrumentSeq });
+        return true;
       case 'play': {
+        room.show.running = false;
         if (!room.track) return false;
         room.playback = {
           mode: 'playing', trackId: room.track.id,
@@ -199,6 +288,7 @@
         return true;
       }
       case 'pause': {
+        room.show.running = false;
         const pos = Number(msg.position);
         room.playback = {
           mode: 'paused', trackId: room.playback.trackId, anchorServer: ctx.now(),
@@ -220,6 +310,7 @@
         return true;
       }
       case 'live': {
+        room.show.running = false;
         room.playback = msg.on
           ? {
               mode: 'live', trackId: null, anchorServer: ctx.now(), anchorPos: 0,
@@ -233,6 +324,7 @@
         return true;
       }
       case 'metronome': {
+        room.show.running = false;
         room.playback = msg.on
           ? { mode: 'metronome', trackId: null, anchorServer: ctx.now() + room.syncBuffer, anchorPos: 0, bpm: clamp(Number(msg.bpm) || 100, 30, 240) }
           : { mode: 'idle', trackId: room.track ? room.track.id : null, anchorServer: ctx.now(), anchorPos: 0, bpm: room.playback.bpm };
@@ -258,6 +350,11 @@
         const target = room.devices.get(msg.id);
         if (!target) return false;
         const patch = {};
+        if (msg.pos === null || spatial.position(msg.pos)) {
+          target.pos = spatial.position(msg.pos);
+          target.posSource = target.pos ? (msg.posSource === 'acoustic' ? 'acoustic' : 'manual') : null;
+          patch.pos = target.pos;
+        }
         if (typeof msg.mode === 'string') { target.mode = msg.mode; patch.mode = msg.mode; }
         if (typeof msg.volume === 'number') { target.volume = clamp(msg.volume, 0, 3); patch.volume = target.volume; }
         if (typeof msg.muted === 'boolean') { target.muted = msg.muted; patch.muted = msg.muted; }

@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#08080a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="description" content="Play one track on every device in the room, in sync.">
 <title>Ensemble</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="instrument.css">
+<link rel="stylesheet" href="stage.css">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a84ff'/><g fill='white'><rect x='7' y='13' width='2.5' height='6' rx='1.25'/><rect x='12' y='9' width='2.5' height='14' rx='1.25'/><rect x='17' y='6' width='2.5' height='20' rx='1.25'/><rect x='22' y='11' width='2.5' height='10' rx='1.25'/></g></svg>">
 </head>
 <body>
@@ -25,7 +28,7 @@
     </span>
     <h1>Ensemble</h1>
   </div>
-  <p class="lede">One track. Every speaker in the room. Locked to the same millisecond.</p>
+  <p class="lede">A room of phones. An instrument you play together.<br>Place your speakers, then move sound through the space.</p>
 
   <div class="start">
     <button class="btn primary big" id="btn-host">Start a session</button>
@@ -61,9 +64,80 @@
       <span class="room-code" id="room-code">————</span>
     </div>
     <div class="spacer"></div>
+    <button class="btn ghost small" id="invite-phones">Invite phones</button>
+    <button class="btn ghost small" id="enter-stage">Screen stage</button>
     <div class="sync-pill" id="sync-pill"><span class="dot"></span><span id="sync-text">syncing</span></div>
   </header>
 
+  <section class="show-desk" id="show-desk" aria-labelledby="show-title" hidden>
+    <div class="show-topline"><div><span class="show-kicker">ENSEMBLE / LIVE INSTALLATION</span><h1 id="show-title">The crowd is the canvas.</h1></div><div class="show-transport"><button class="btn primary" id="show-run">Start polyrhythm</button><button class="btn" id="show-stop">Stop all sound</button><button class="btn" id="show-blackout" aria-pressed="false">Blackout screens</button></div></div>
+    <div class="rhythm-strip">
+      <canvas id="rhythm-dial" width="280" height="180" role="img" aria-label="Two rhythm cycles and a shared metronome"></canvas>
+      <div class="rhythm-settings"><div class="show-input-row"><label>Tempo<input id="show-bpm" type="number" min="30" max="180" step="1" value="96"><span>BPM</span></label><label>Cycle<input id="show-beats" type="number" min="1" max="8" value="4"><span>beats</span></label><label class="lane-a">Lane A<input id="show-a" type="number" min="1" max="12" value="3"><span>pulses</span></label><label class="lane-b">Lane B<input id="show-b" type="number" min="1" max="12" value="4"><span>pulses</span></label></div><div class="show-input-row"><label>Travel<select id="show-path"><option value="orbit">Orbit</option><option value="sweep">Sweep</option><option value="still">Two fixed points</option></select></label><label class="check-label"><input id="show-metronome" type="checkbox"> Audible metronome</label><span id="show-beat-readout" aria-live="off">Stopped · 3 : 4</span></div></div>
+      <div class="show-levels"><label>Room volume <output id="show-master-value">70%</output><input type="range" id="show-master" min="0" max="1" step="0.01" value="0.7"></label><label>Screen brightness <output id="show-brightness-value">65%</output><input type="range" id="show-brightness" min="0" max="1" step="0.01" value="0.65"></label></div>
+    </div>
+    <div class="cue-strip"><label>Screen language<select id="show-style"><option value="bloom">Bloom</option><option value="rings">Rings</option><option value="ribbons">Ribbons</option></select></label><label>Colour<select id="show-palette"><option value="ocean">Ocean</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="mint">Mint</option></select></label><label>Send a light cue to<select id="cue-target"><option value="all">Every screen</option></select></label><button class="btn" id="send-cue">Send light cue</button></div>
+    <p class="show-note">3 : 4 means three pulses against four over the same cycle. Sound and screen cues share one clock. Start with gentle brightness.</p>
+  </section>
+  <section class="instrument" id="instrument" aria-labelledby="instrument-title">
+    <div class="instrument-heading">
+      <div><h2 id="instrument-title">Play the room.</h2><p id="instrument-description">Place each phone where it sits. Touch the field to send a note through the space.</p></div>
+      <div class="instrument-actions"><button class="btn primary" id="instrument-toggle">Start instrument</button><button class="btn" id="instrument-panic">Silence notes</button></div>
+    </div>
+    <p id="instrument-status" role="status">Waiting for the room clock…</p>
+    <div class="instrument-layout">
+      <div class="field-column">
+        <div class="field-toolbar"><span id="field-mode">Sound field</span><div class="field-actions"><button class="btn" id="place-circle">Arrange in circle</button><button class="btn ghost" id="placement-toggle" aria-pressed="false">Place speakers</button></div></div>
+        <svg id="sound-field" viewBox="0 0 600 600" tabindex="0" role="img" aria-label="Room sound field. Arrow keys move the source; Enter plays a note. Use the speaker coordinate controls for accessible placement." aria-describedby="field-help">
+          <defs><pattern id="metre-grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="currentColor" stroke-width="1"/></pattern></defs>
+          <rect width="600" height="600" fill="url(#metre-grid)" class="field-grid"/>
+          <path d="M300 0V600 M0 300H600" class="field-axis"/>
+          <text x="300" y="27" text-anchor="middle" class="field-label">FRONT</text>
+          <text x="18" y="578" class="field-label" id="field-scale">10 × 10 m</text>
+          <g id="field-speakers"></g>
+          <g id="field-source" transform="translate(300 300)"><circle id="field-spread" r="90"/><circle r="9" class="source-dot"/><path d="M-16 0H-11 M11 0H16 M0-16V-11 M0 11V16" class="source-cross"/></g>
+          <g id="field-pulses" aria-hidden="true"></g>
+        </svg>
+        <p id="field-help">Drag to scatter notes. A–K play the eight notes below. Arrow keys move the source; Enter plays. Escape silences notes.</p>
+        <div class="note-keys" id="note-keys" aria-label="D minor pentatonic notes"></div>
+        <div class="phone-wall" id="phone-wall" aria-label="Connected phone screen previews"></div>
+      </div>
+      <div class="instrument-controls">
+        <div id="performance-controls">
+          <h3>Shape the sound</h3>
+          <label class="instrument-label" for="instrument-voice">Voice</label>
+          <select id="instrument-voice"><option value="sine">Sine · soft</option><option value="triangle">Triangle · wood</option><option value="bell">FM · bell</option></select>
+          <label class="instrument-label" for="instrument-spread">Spread <output id="spread-value">1.5 m</output></label>
+          <input id="instrument-spread" type="range" min="0.3" max="6" step="0.1" value="1.5">
+          <label class="instrument-label" for="instrument-duration">Note length <output id="duration-value">0.4 s</output></label>
+          <input id="instrument-duration" type="range" min="0.1" max="2" step="0.1" value="0.4">
+          <label class="instrument-label" for="instrument-velocity">Touch level <output id="velocity-value">65%</output></label>
+          <input id="instrument-velocity" type="range" min="10" max="100" step="1" value="65">
+          <label class="instrument-label" for="instrument-lead">Gesture lead <output id="lead-value">100 ms</output></label>
+          <input id="instrument-lead" type="range" min="40" max="1000" step="10" value="100">
+          <button class="btn ghost" id="instrument-recommend">Estimate gesture lead</button>
+          <p class="instrument-help" id="lead-hint">Shorter feels closer to your hands. Increase if notes arrive late. This is a scheduling budget, not measured acoustic latency.</p>
+        </div>
+        <div class="placement-controls" id="placement-controls">
+          <h3>Locate the speakers</h3>
+          <p class="instrument-help">Start with a circle, then drag each number to its physical position. Coordinates are metres from the centre.</p>
+          <div class="btn-row"><button class="btn ghost" id="use-acoustic">Use acoustic map</button></div>
+          <label class="instrument-label" for="speaker-select">Speaker</label><select id="speaker-select"></select>
+          <div class="coordinate-row"><label>X<input id="speaker-x" type="number" min="-50" max="50" step="0.1" value="0"></label><label>Y<input id="speaker-y" type="number" min="-50" max="50" step="0.1" value="0"></label><button class="btn" id="place-coordinate">Place</button></div>
+          <p class="instrument-help">Negative Y is front. The Room tab measures positions with microphones on HTTPS; manual placement also works over local HTTP.</p>
+        </div>
+        <div class="instrument-readout"><h3>This speaker</h3><p id="speaker-health">Preparing audio…</p><button class="btn" id="instrument-local-mute" aria-pressed="false">Mute this speaker</button><p class="instrument-help" id="movement-hint">If a phone moves, update its position before playing again.</p><button class="btn ghost" id="instrument-motion" aria-pressed="false">Detect movement</button></div>
+      </div>
+    </div>
+  </section>
+  <section class="diagnostics-panel" id="diagnostics-panel" hidden aria-labelledby="diagnostics-title">
+    <div class="diagnostics-heading"><div><h2 id="diagnostics-title">Room soundcheck</h2><p>Live device reports, measured scheduling margins, and a shared test record.</p></div><div class="btn-row"><button class="btn" id="run-soundcheck">Run 30-second soundcheck</button><button class="btn ghost" id="download-diagnostics">Download report</button></div></div>
+    <div class="diagnostic-summary"><strong id="diagnostic-summary">Waiting for device reports…</strong><label class="check-label"><input type="checkbox" id="show-auto-guard" checked> Automatically increase lead when timing becomes unsafe</label></div>
+    <p id="diagnostic-test-status" role="status">No test running. Reports can be read from this project's diagnostics command.</p>
+    <div class="diagnostic-table-wrap"><table><thead><tr><th>Device</th><th>Audio</th><th>Network p95</th><th>Clock spread</th><th>Audio margin p05</th><th>Late / played</th><th>Screen p95</th></tr></thead><tbody id="diagnostic-devices"></tbody></table></div>
+    <ul id="diagnostic-warnings"></ul><p class="show-note">These are browser and scheduling measurements. They do not measure speaker-to-ear delay or exact physical screen scanout. No microphone recordings are uploaded.</p>
+  </section>
+  <details class="playback-details"><summary>Tracks, invitations & room setup</summary>
   <div class="layout">
     <!-- ── player ── -->
     <section class="card player">
@@ -286,6 +360,7 @@
       </div>
     </section>
   </div>
+  </details>
 </main>
 
 <!-- ────────────────────────────── audio unlock ─────────────────────────── -->
@@ -299,7 +374,15 @@
 </div>
 
 <div id="toast" class="toast" hidden></div>
+<section id="phone-stage" class="phone-stage" hidden aria-label="Fullscreen participant visual instrument">
+  <canvas id="stage-canvas" aria-label="Visual response to this phone's sound and cues"></canvas>
+  <div class="stage-top"><span id="stage-identity">ENSEMBLE</span><button class="btn" id="exit-stage">Exit stage</button></div>
+  <div class="stage-bottom"><p id="stage-status">Ready for the next cue</p><div class="stage-options"><button class="btn" id="stage-mute">Mute sound</button><button class="btn" id="stage-soft" aria-pressed="false">Reduced motion</button><label>My brightness<input type="range" id="stage-local-brightness" min="0" max="1" step="0.05" value="0.8"></label></div></div>
+</section>
 
+<script src="vendor/Tone.js"></script>
+<script src="spatial.js"></script>
+<script src="show-core.js"></script>
 <script src="room-core.js"></script>
 <script src="audio.js"></script>
 <script src="acoustic.js"></script>
@@ -307,6 +390,9 @@
 <script src="mesh.js"></script>
 <script src="live.js"></script>
 <script src="net.js"></script>
+<script src="instrument.js"></script>
+<script src="stage.js"></script>
+<script src="diagnostics.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

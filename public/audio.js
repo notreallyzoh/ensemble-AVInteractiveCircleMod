@@ -355,6 +355,7 @@ const Engine = {
   setVolume(v) { this.volume = clamp(v, 0, 3); this.applyGain(); },
   setMuted(b) { this.muted = !!b; this.applyGain(); },
   applyGain() {
+    if (typeof Instrument !== 'undefined') Instrument.updateGain();
     if (!this.graph) return;
     const g = this.graph.out.gain, t = this.ctx.currentTime;
     g.cancelScheduledValues(t);

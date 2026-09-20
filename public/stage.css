@@ -1,0 +1,72 @@
+/* A performance console: rhythm is visible, and every coloured surface is a cue. */
+.screen { max-width: 1360px; }
+.topbar { flex-wrap: wrap; }
+.show-desk { padding: 22px 0 24px; }
+.show-topline { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; }
+.show-kicker { font-size: 11px; letter-spacing: .1em; color: var(--text-2); }
+.show-topline h1 { font-size: clamp(25px,3.4vw,40px); margin: 7px 0 0; }
+.show-transport { display: flex; flex-wrap: wrap; gap: 7px; }
+.show-desk .btn, .diagnostics-panel .btn { min-height: 44px; border-radius: 6px; font-size: 14px; }
+.rhythm-strip { display: grid; gap: 22px; margin-top: 26px; padding: 22px 0; border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline); }
+#rhythm-dial { width: 100%; max-width: 280px; height: 160px; }
+.show-input-row { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; margin-bottom: 15px; }
+.show-desk label { font-size: 13px; display: flex; flex-direction: column; gap: 7px; }
+.show-desk input[type=number] { width: 76px; }
+.show-desk input[type=number], .show-desk select { background: var(--bg-elev); border: 1px solid var(--hairline); border-radius: 5px; color: var(--text); font: inherit; font-size: 16px; min-height: 44px; padding: 8px 10px; }
+.show-desk label span { color: var(--text-2); font-size: 12px; }
+.show-levels { display: flex; flex-direction: column; gap: 16px; }
+.show-levels label { display: grid; grid-template-columns: 1fr auto; }
+.show-levels input { grid-column: 1 / -1; min-height: 30px; }
+.show-levels output { font-variant-numeric: tabular-nums; color: var(--text-2); }
+.check-label, .show-desk .check-label { display: flex; flex-direction: row; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; }
+.check-label input { width: 18px; height: 18px; accent-color: var(--accent); }
+.cue-strip { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; padding-top: 18px; }
+.cue-strip label { flex: 1; min-width: 140px; }
+.cue-strip .btn { margin-bottom: 0; }
+.show-note { font-size: 14px; color: var(--text-2); line-height: 1.65; margin-bottom: 0; }
+.lane-a { color: #57b9ef; }.lane-b { color: #df925a; }
+.phone-wall { display: grid; grid-template-columns: repeat(auto-fill,minmax(78px,1fr)); gap: 10px; margin-top: 24px; }
+.phone-preview { background: #10151d; color: #e8eef5; border: 1px solid #35404c; border-radius: 9px; min-height: 120px; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: end; padding: 10px 4px; cursor: pointer; }
+.phone-preview canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.phone-preview span { position: relative; font-size: 12px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.phone-preview .phone-id { position: absolute; top: 10px; left: 10px; font-size: 16px; }
+.phone-preview[aria-pressed=true] { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 2px; }
+.phone-preview small { z-index: 1; color: #b1bdcb; font-size: 10px; }
+.diagnostics-panel { border-top: 1px solid var(--hairline); margin-top: 28px; padding: 25px 0; }
+.diagnostics-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: 12px; }
+.diagnostics-heading h2 { font-size: 23px; margin: 0 0 7px; }
+.diagnostics-heading p { color: var(--text-2); margin: 0; }
+.diagnostic-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 20px 0 0; }
+.diagnostic-summary strong { font-size: 16px; font-weight: 500; }
+#diagnostic-test-status { color: var(--text-2); }
+.diagnostic-table-wrap { overflow-x: auto; }
+.diagnostics-panel table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; font-variant-numeric: tabular-nums; }
+.diagnostics-panel th { color: var(--text-2); font-weight: 500; white-space: nowrap; }
+.diagnostics-panel td,.diagnostics-panel th { padding: 12px 8px; border-bottom: 1px solid var(--hairline); }
+#diagnostic-warnings { padding-left: 20px; color: var(--amber); }
+.phone-stage { position: fixed; inset: 0; width: 100%; height: 100dvh; z-index: 1000; background: #090b10; color: #ecf3ff; }
+#stage-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.stage-top,.stage-bottom { position: absolute; z-index: 1; left: max(20px,env(safe-area-inset-left)); right: max(20px,env(safe-area-inset-right)); }
+.stage-top { top: max(18px,env(safe-area-inset-top)); display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+#stage-identity { font-size: 14px; letter-spacing: .06em; }
+.stage-bottom { bottom: max(22px,env(safe-area-inset-bottom)); }
+.stage-options { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; opacity: .7; }
+.stage-options:focus-within,.stage-options:hover { opacity: 1; }
+.stage-options label { display: flex; flex-direction: column; font-size: 12px; gap: 6px; }
+.stage-options input { width: 110px; }
+.phone-stage .btn { min-height: 44px; background: rgba(7,12,20,.55); color: #ecf3ff; border: 1px solid #768ba955; border-radius: 5px; font-size: 14px; }
+#stage-status { font-size: 14px; opacity: .85; }
+body.in-stage { overflow: hidden; }
+.stage-top,.stage-bottom { transition: opacity .25s; }
+.phone-stage.calm .stage-top,.phone-stage.calm .stage-bottom { opacity: .35; }
+.phone-stage.calm:focus-within .stage-top,.phone-stage.calm:focus-within .stage-bottom { opacity: 1; }
+.instrument-heading h2 { font-size: 28px; }
+@media (min-width: 850px) {
+  .rhythm-strip { grid-template-columns: 220px minmax(0,1fr) 220px; align-items: center; }
+  .instrument-layout { grid-template-columns: minmax(0,1fr) 300px; gap: 38px; }
+  #sound-field { max-width: 680px; margin: auto; }
+}
+@media (prefers-color-scheme: light) {
+  .show-desk,.diagnostics-panel { --text-2: #62626d; }
+}
+@media (prefers-reduced-motion: reduce) { .stage-top,.stage-bottom { transition: none; } }

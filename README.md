@@ -1,15 +1,92 @@
-# Ensemble
+# Ensemble — spatial instrument
 
-Play one track on every device in the room, locked to the same millisecond.
-One device hosts, the others scan a QR code, and each becomes a speaker — a
-stereo pair, a 5.1 layout, or a wall of mono.
+A room of phones becomes an instrument. The host plays notes and places their
+source in a shared room map. Each phone synthesizes a Tone.js voice at the same
+scheduled time, with its level determined by its distance from the source.
 
-No build step, no framework, nothing to install. Two vendored MIT libraries —
-[PeerJS](https://peerjs.com) for the WebRTC handshake and
-[qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) — are the
-only third-party code, and they sit in `public/vendor/`.
+Built from [ensemble-AVInteractiveCircleMod](https://github.com/notreallyzoh/ensemble-AVInteractiveCircleMod).
+The original shared-track player, live stream, clock synchronization, room
+mapping and speaker controls remain under **Tracks, invitations & room setup**.
 
-## Running it
+## Play the first version
+
+The new **crowd A/V stage** adds two polyrhythm lanes, scheduled fullscreen phone
+visuals, screen previews, light cues, blackout, and live setup diagnostics with
+automatic timing guard. See [the show and diagnostics guide](docs/LIVE-SHOW.md)
+for the first-device test, Cloudflare deployment, chat-accessible reports and
+the next experiments.
+
+```bash
+node server.js
+```
+
+1. Open **http://localhost:8080** on the host and choose **Start a session**.
+2. Click **Invite phones**. On the same Wi-Fi, scan the QR or open the LAN URL
+   printed in the terminal. Enter the room code and tap **Join**. Each phone
+   needs its own audio activation; keep its page visible and screen awake.
+3. Click **Arrange in circle**, then **Place speakers** and drag each numbered
+   phone to match the room. You can also enter X/Y coordinates in metres.
+   A circle is an initial arrangement you assign, not a measurement.
+4. Choose **Start instrument**. Touch/drag the field to scatter notes, or play
+   the D-minor-pentatonic buttons with **A S D F G H J K**. The selected note
+   stays fixed as you move its source. Spread controls how widely sound is shared.
+5. Start with **100 ms gesture lead**. Use **Estimate gesture lead**, then play
+   and watch the late-note counters. Increase the lead when notes miss deadlines.
+   This setting is separate from the older file/stream sync buffer.
+
+Arrow keys move the source when the field has focus; Enter plays. **Escape** or
+**Silence notes** cancels current and queued instrument voices. **Mute this
+speaker** also lets a laptop act only as the host controller.
+
+No build or network dependency is needed to run locally: Tone.js **15.1.22**,
+PeerJS and the QR generator are vendored with licenses. `npm ci` installs pinned
+development dependencies; `npm run vendor` refreshes the Tone.js bundle from the
+installed version.
+
+### Positions and sensors
+
+Manual placement works on plain HTTP. The existing acoustic mapper uses phone
+microphones to estimate distances; it requires a secure context. Its **Apply
+to devices** action now saves coordinates as well as roles and trims. **Use
+acoustic map** imports just the coordinates into the instrument, keeping timing
+trims unchanged. Check the inferred map against the physical room.
+
+**Detect movement** is optional and requests sensor permission where required.
+It reminds the host to update a moved phone; it does not integrate acceleration
+into an invented position. Denied or unsupported sensors do not block playing.
+
+For local HTTPS, use a certificate covering the host's LAN address and trusted
+by every participating device. With those files in place, PowerShell:
+
+```powershell
+$env:TLS_CERT = 'C:\certs\ensemble-cert.pem'
+$env:TLS_KEY = 'C:\certs\ensemble-key.pem'
+node server.js
+```
+
+Both variables must be set. A certificate warning bypass does not establish a
+reliable secure context; provision device trust before trying microphone or
+motion features. Static HTTPS hosting remains available through the existing
+Pages workflow and uses the original PeerJS mode. Nothing is automatically
+published by local setup.
+
+### Verification and next steps
+
+```bash
+npm ci
+npm test
+npm run test:browser
+```
+
+Browser tests use an installed Chrome and a separate server on port 8091. They
+cover independent host/phone sessions, audio-graph output, note distribution,
+late-drop handling, mute, panic, placement, mobile layout and legacy file playback.
+These checks **do not establish acoustic synchronization across physical phones**.
+
+Read [the architecture study and development roadmap](docs/SPATIAL-INSTRUMENT.md)
+for findings, browser constraints, localization options and an in-room test plan.
+
+## Original playback modes
 
 **Hosted (GitHub Pages).** The whole app is static, so it can live on Pages.
 There is no server, so the host's own tab holds the room and every other device
@@ -21,7 +98,7 @@ git push -u origin main
 
 Then **Settings → Pages → Source → GitHub Actions**. The included workflow
 publishes `public/` on every push to `main`, and the app goes live at
-**https://allencrspy.github.io/ensemble/**
+the Pages URL shown in this repository's deployment settings.
 
 A public PeerJS broker handles the initial handshake only — the offer/answer
 exchange. Audio, control messages and clock traffic go device to device and
@@ -54,8 +131,9 @@ It is not a voice call under the hood. The host captures the audio, cuts it into
 23 ms chunks, and stamps each one with the instant it should be *heard* —
 capture time plus a fixed buffer. Every device, the host included, schedules
 that chunk for exactly that instant. Nobody plays a chunk when it arrives; they
-play it when the clock says to, which is what keeps the room together. Measured
-between two machines: playback cursors 0.1 ms apart, no late chunks.
+play it when the clock says to. The upstream README reports playback cursors
+0.1 ms apart on two machines; this has not been independently reproduced here
+and is not a microphone measurement of speaker alignment.
 
 - The buffer is the **sync buffer** in the Sync tab. 700 ms is a good default;
   shorter feels more immediate and risks gaps on weak Wi-Fi.
@@ -109,7 +187,7 @@ add its own error. Timing is star-shaped and cheap (about 1 kbps per device);
 only audio and failure handling are per-hop. On a multi-AP or mesh network that
 trade would flip, and boundary-clock style sync would win.
 
-Measured with four devices, one of them running a 48 kHz audio context against a
+The upstream README reports four devices, one running a 48 kHz audio context against a
 44.1 kHz capture: **playback cursors within 0.22 ms**, zero re-anchors, zero
 gaps, Opus at 132 kbps.
 
@@ -136,8 +214,9 @@ making everyone else wait: two disjoint paths, and whichever copy of a chunk
 lands first wins. That halves nothing on average and everything in the tail,
 which is where dropouts live.
 
-Measured on a three-device room: 700 ms → **173 ms** buffer, cursors within
-**0.35 ms**, zero gaps.
+The upstream README reports a three-device room: 700 ms → **173 ms** buffer, cursors within
+**0.35 ms**, zero gaps. These are upstream cursor measurements, not validated
+performance guarantees for this instrument or a new room.
 
 ## How the sync works
 
@@ -175,7 +254,7 @@ sample for the same instant.
    the mic, and times the loop; **Auto-align** then delays every device to match
    the slowest.
 
-Measured between two machines on a LAN: sub-millisecond agreement, settling
+The upstream README reports two machines on a LAN: sub-millisecond agreement, settling
 inside the 3 ms deadband. Peer-to-peer, where the reference is a browser tab
 rather than a server, it holds within about 10 ms.
 
@@ -248,9 +327,9 @@ delay measurement above is what compensates for it.
 
 ## Limits
 
-- The host shares a *file*, not its live system audio. Mirroring whatever the
-  host happens to be playing needs capture and streaming, and a live stream
-  cannot be scheduled ahead — which is exactly what buys the tight sync.
+- The instrument transmits note events; it does not remove the latency of live
+  captured audio. File playback and the existing buffered live-capture mode have
+  separate timing behavior and should be evaluated separately.
 - Peer-to-peer mode assumes devices can reach each other directly, which is the
   normal case on one Wi-Fi network. Across separate networks WebRTC would need a
   TURN relay, which is not included.

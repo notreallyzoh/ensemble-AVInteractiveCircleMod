@@ -4,6 +4,23 @@
   "private": true,
   "description": "Synchronized multi-device audio playback — one host, many speakers.",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "engines": { "node": ">=18" }
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.cjs",
+    "test:browser": "playwright test",
+    "vendor": "node scripts/vendor.cjs",
+    "dev:cloud": "wrangler dev --port 8092",
+    "deploy": "wrangler deploy",
+    "diagnostics": "node scripts/diagnostics.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "tone": "15.1.22"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "wrangler": "4.135.0"
+  }
 }

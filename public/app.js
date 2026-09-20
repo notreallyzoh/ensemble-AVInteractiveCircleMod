@@ -15,6 +15,8 @@ const Sensors = {
   lastPulse: 0,
 
   init() {
+    if (this.initialized) return;
+    this.initialized = true;
     this.wireWake();
     this.wireBattery();
     this.wireNet();
@@ -263,7 +265,11 @@ async function connectRoom(opts) {
 }
 
 function onDisconnected() {
+  Stage.clear(); Diagnostics.stopTest();
   App.connected = false;
+  Clock.ready = false; Clock.samples = [];
+  Instrument.silence();
+  Acoustic.close();
   if (!App.id) return;
   setSyncPill('bad', Net.mode === 'p2p' ? 'host gone' : 'reconnecting');
   Engine.stop(); Engine.stopMetronome();
@@ -276,6 +282,7 @@ function handleMessage(m) {
   switch (m.t) {
     case 'sync': Clock.note(m.c, m.s); break;
     case 'welcome':
+      Instrument.reset(); Stage.clear(); Stage.lastSeq = 0;
       App.id = m.id;
       applyRoom(m.room);
       show('session');
@@ -286,6 +293,15 @@ function handleMessage(m) {
       pushState({ mode: App.mode, volume: App.volume, trim: App.trim });
       break;
     case 'roster': applyRoom(m.room); break;
+    case 'instrument-note':
+    case 'instrument-panic': Stage.receive(m); Instrument.receive(m); break;
+    case 'visual-cue': Stage.receive(m); break;
+    case 'diagnostics-report': Diagnostics.export(m.report); break;
+    case 'instrument-rejected':
+      Instrument.rejected = (Instrument.rejected || 0) + 1;
+      Instrument.rejectionReason = m.reason;
+      Instrument.renderHealth();
+      break;
     case 'playback':
       if (App.room) {
         App.room.playback = m.playback;
@@ -305,7 +321,8 @@ function handleMessage(m) {
       if (typeof p.muted === 'boolean') { App.muted = p.muted; Engine.setMuted(p.muted); }
       if (typeof p.trim === 'number') { App.trim = p.trim; Engine.setTrim(p.trim); store.set('ensemble.trim', p.trim); }
       syncSelfControls();
-      toast('Host adjusted this device');
+      Instrument.updateGain();
+      if (!('pos' in p)) toast('Host adjusted this device');
       break;
     }
     case 'parent':
@@ -317,12 +334,14 @@ function handleMessage(m) {
     case 'relayed': handleRelay(m.from, m.payload); break;
     case 'promoted': toast('You are the host now'); renderShare(); break;
     case 'superseded':
+      Instrument.silence();
       App.id = null;
       Engine.stop(); Engine.stopMetronome();
       toast('This session was reopened in another tab on this device');
       setTimeout(() => { show('landing'); }, 300);
       break;
     case 'kicked':
+      Instrument.silence();
       toast('Removed from the session');
       setTimeout(() => location.reload(), 1200);
       break;
@@ -336,7 +355,15 @@ function handleMessage(m) {
 /** Device-to-device traffic: the acoustic ranging session. */
 function handleRelay(from, payload) {
   if (!payload) return;
+  if (['selfcal', 'chirp', 'ranging-done'].includes(payload.k) && (!App.room || from !== App.room.hostId)) return;
   switch (payload.k) {
+    case 'ranging-done': Acoustic.close(); setMapStatus(''); break;
+    case 'instrument-moved': {
+      if (!isHost()) break;
+      const device = App.room.devices.find((d) => d.id === from);
+      if (device) toast(`${device.name} moved — check its position`, 5000);
+      break;
+    }
     case 'selfcal':
       setMapStatus('measuring this speaker…');
       Ranger.selfCalibrateLocal().then((r) => {
@@ -428,6 +455,8 @@ function applyPlayback() {
   const key = JSON.stringify(pb);
   const changed = key !== App.appliedPlayback;
   App.appliedPlayback = key;
+  if (pb.mode !== 'instrument' && changed) Instrument.silence();
+  if (pb.mode === 'instrument' && changed) { Instrument.prepare(); Instrument.makeVoices(); }
 
   if (pb.mode !== 'metronome' && Engine.metroOn) Engine.stopMetronome();
   if (pb.mode !== 'live' && Live.on && !Live.sending) Live.end();
@@ -501,7 +530,7 @@ async function renderShare() {
   const url = shareUrl();
   $('#invite-code').textContent = App.room.code;
   $('#invite-url').textContent = url.replace(/^https?:\/\//, '');
-  $('#transport-chip').textContent = Net.mode === 'p2p' ? 'peer to peer' : 'local network';
+  $('#transport-chip').textContent = Net.mode === 'p2p' ? 'peer to peer' : Net.info?.cloud ? 'Cloudflare room' : 'local network';
   $('#btn-share').hidden = !navigator.share;
 
   if (Net.mode === 'ws' && App.lanInfo && App.lanInfo.addresses && App.lanInfo.addresses.length &&
@@ -567,13 +596,13 @@ function wireTabs() {
 function wireMap() {
   $('#btn-map').addEventListener('click', async () => {
     if (!isHost() || Ranger.running) return;
+    if (Instrument.active()) send({ t: 'instrument-mode', on: false });
     renderMapCard();
     try {
       const map = await Ranger.run(setMapStatus);
       setMapStatus('');
       if (map) {
         toast(`Mapped ${map.ids.length} devices`);
-        pushState({ pos: null });
       }
     } catch (e) {
       setMapStatus('');
@@ -592,6 +621,7 @@ function wireMap() {
     const map = Ranger.map;
     if (!map || !isHost()) return;
     map.ids.forEach((id, i) => {
+      send({ t: 'device', id, pos: map.points[i], posSource: 'acoustic' });
       const role = map.roles[id];
       const trim = map.delays[id];
       if (id === App.id) {
@@ -605,7 +635,6 @@ function wireMap() {
       } else {
         send({ t: 'device', id, mode: role, trim });
       }
-      send({ t: 'state', patch: {} });
     });
     toast('Roles and delays applied from the map');
   });
@@ -681,6 +710,7 @@ function renderSourceInfo() {
 }
 
 function syncSelfControls() {
+  Instrument.updateGain();
   const vol = $('#volume');
   vol.value = Math.round(App.volume * 100); fillRange(vol);
   $('#vol-value').textContent = Math.round(App.volume * 100) + '%';
@@ -740,6 +770,8 @@ function renderRoom() {
   $('#btn-layout').hidden = !isHost() || App.room.devices.length < 2;
   renderMapCard();
   renderDevices();
+  Instrument.render();
+  Stage.render();
 }
 
 function renderDevices() {
@@ -1175,7 +1207,7 @@ function wireLanding() {
     Net.mode = mode;
     $('#landing-note').textContent = mode === 'p2p'
       ? 'Peer to peer — devices connect straight to the host. Nothing is uploaded to a server.'
-      : 'Local network — this machine is running the session server.';
+      : Net.info?.cloud ? 'Cloudflare room — join from any phone. Keep everyone on reliable Wi-Fi.' : 'Local network — this machine is running the session server.';
     // A QR that says "localhost" is useless to a phone, so find the LAN address
     // whenever one is on offer, in either transport.
     if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
@@ -1383,6 +1415,7 @@ function wireSession() {
     if (!ok) { toast('Could not start audio — check silent mode and volume'); return; }
     $('#gate').hidden = true;
     Engine.setMode(App.mode); Engine.setVolume(App.volume); Engine.setMuted(App.muted); Engine.setTrim(App.trim);
+    Instrument.prepare(); Instrument.report();
     if (App.pendingBytes) {
       const bytes = App.pendingBytes; App.pendingBytes = null;
       try {
@@ -1401,7 +1434,7 @@ function wireSession() {
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, select, textarea')) return;
-    if (e.code === 'Space' && isHost()) { e.preventDefault(); $('#btn-play').click(); }
+    if (e.code === 'Space' && isHost() && e.target === document.body && !Instrument.active()) { e.preventDefault(); $('#btn-play').click(); }
   });
 
   // Coming back from the background: the clock estimate is stale, so remeasure.
@@ -1421,6 +1454,9 @@ wireLanding();
 wireSession();
 wireMap();
 wireTabs();
+Instrument.init();
+Stage.init();
+Diagnostics.init();
 renderModes();
 syncSelfControls();
 $$('input[type=range]').forEach(fillRange);

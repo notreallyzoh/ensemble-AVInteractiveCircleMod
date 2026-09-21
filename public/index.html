@@ -10,13 +10,14 @@
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="instrument.css">
 <link rel="stylesheet" href="stage.css">
+<link rel="stylesheet" href="desk.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a84ff'/><g fill='white'><rect x='7' y='13' width='2.5' height='6' rx='1.25'/><rect x='12' y='9' width='2.5' height='14' rx='1.25'/><rect x='17' y='6' width='2.5' height='20' rx='1.25'/><rect x='22' y='11' width='2.5' height='10' rx='1.25'/></g></svg>">
 </head>
 <body>
 
 <!-- ───────────────────────────────── landing ───────────────────────────── -->
-<main id="landing" class="screen landing">
+<section id="landing" class="screen landing">
   <div class="wordmark">
     <span class="mark" aria-hidden="true">
       <svg viewBox="0 0 32 32"><g fill="currentColor">
@@ -51,7 +52,7 @@
     <p class="landing-error" id="landing-error" hidden></p>
     <p class="landing-note" id="landing-note"></p>
   </div>
-</main>
+</section>
 
 <!-- ───────────────────────────────── session ───────────────────────────── -->
 <main id="session" class="screen" hidden>
@@ -128,6 +129,18 @@
         </div>
         <div class="instrument-readout"><h3>This speaker</h3><p id="speaker-health">Preparing audio…</p><button class="btn" id="instrument-local-mute" aria-pressed="false">Mute this speaker</button><p class="instrument-help" id="movement-hint">If a phone moves, update its position before playing again.</p><button class="btn ghost" id="instrument-motion" aria-pressed="false">Detect movement</button></div>
       </div>
+    </div>
+  </section>
+  <section id="extensions" class="extensions" aria-labelledby="extensions-title">
+    <h2 id="extensions-title">Optional instruments</h2><p>Enable only what you want to use. These start off in each new room.</p>
+    <div class="extension-block"><label class="check-label"><input type="checkbox" id="enable-gestures"> Record spatial gestures</label>
+      <div id="gesture-controls" hidden><p>Record up to 60 seconds of your pad and sound-field gestures. Phrases stay on this host browser.</p><div class="btn-row"><button id="gesture-record" class="btn">Record phrase</button><button id="gesture-replay" class="btn">Replay phrase</button><button id="gesture-stop" class="btn">Stop phrase</button><button id="gesture-clear" class="btn ghost">Clear phrase</button><label class="check-label"><input type="checkbox" id="gesture-loop"> Loop</label></div><p id="gesture-status" role="status">No phrase recorded.</p></div>
+    </div>
+    <div class="extension-block"><label class="check-label"><input type="checkbox" id="enable-roles"> Assign musical roles to groups</label>
+      <div id="role-controls" hidden><p>Melody and bass follow Lane A and hand-played notes; pulse follows Lane B and the metronome. Visual-only phones keep their light cues.</p><div class="btn-row"><select id="role-bulk" aria-label="Role for selected phones"><option value="all">Full ensemble</option><option value="melody">Melody · A + hands</option><option value="bass">Bass · octave below</option><option value="pulse">Pulse · B + beat</option><option value="visual">Visual only</option></select><button id="role-assign" class="btn">Assign to selected</button></div><div id="role-devices"></div></div>
+    </div>
+    <div class="extension-block"><label class="check-label"><input type="checkbox" id="enable-calibration"> Microphone timing calibration</label>
+      <div id="timing-controls" hidden><p>Stop playback first. Place this laptop's microphone at the coordinates below and keep it still. Each unmuted, placed speaker plays three short test chirps. Recordings stay on this device.</p><div class="coordinate-row"><label>Mic X (m)<input id="timing-x" type="number" min="-50" max="50" step="0.1" value="0"></label><label>Mic Y (m)<input id="timing-y" type="number" min="-50" max="50" step="0.1" value="0"></label></div><div class="btn-row"><button id="timing-measure" class="btn">Measure with this microphone</button><button id="timing-cancel" class="btn">Cancel measurement</button><button id="timing-apply" class="btn" disabled>Apply measured offsets</button><button id="timing-reset" class="btn ghost">Clear offsets</button></div><p id="timing-status" role="status">Microphone access is requested only when you press Measure.</p><div id="timing-results"></div><p class="instrument-help">This estimates relative output timing, not absolute latency. Room echoes and inaccurate positions can bias it. Disabling this option removes its offsets; your manual trims stay unchanged.</p></div>
     </div>
   </section>
   <section class="diagnostics-panel" id="diagnostics-panel" hidden aria-labelledby="diagnostics-title">
@@ -383,6 +396,7 @@
 <script src="vendor/Tone.js"></script>
 <script src="spatial.js"></script>
 <script src="show-core.js"></script>
+<script src="extensions-core.js"></script>
 <script src="room-core.js"></script>
 <script src="audio.js"></script>
 <script src="acoustic.js"></script>
@@ -393,6 +407,8 @@
 <script src="instrument.js"></script>
 <script src="stage.js"></script>
 <script src="diagnostics.js"></script>
+<script src="extensions.js"></script>
+<script src="desk.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

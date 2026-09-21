@@ -265,6 +265,7 @@ async function connectRoom(opts) {
 }
 
 function onDisconnected() {
+  Extras.stop(); Timing.cancel();
   Stage.clear(); Diagnostics.stopTest();
   App.connected = false;
   Clock.ready = false; Clock.samples = [];
@@ -294,7 +295,10 @@ function handleMessage(m) {
       break;
     case 'roster': applyRoom(m.room); break;
     case 'instrument-note':
-    case 'instrument-panic': Stage.receive(m); Instrument.receive(m); break;
+    case 'instrument-panic': if (m.t === 'instrument-panic') { Extras.replaying=false; if (Extras.recording) Extras.stop(); Extras.status(); } Stage.receive(m); Instrument.receive(m); break;
+    case 'timing-ack': if (m.run === Timing.run) Timing.ack?.(true); break;
+    case 'timing-chirp': if (Extras.enabled('calibrationEnabled') && !App.muted && App.volume > 0 && !document.hidden && Clock.ready && Engine.unlocked()) Acoustic.emitAt(m.at, 0.35 * Math.min(1, App.volume)); break;
+    case 'timing-cancel': Acoustic.cancelEmissions(); if (Timing.running && !Timing.cancelled) Timing.cancel(); break;
     case 'visual-cue': Stage.receive(m); break;
     case 'diagnostics-report': Diagnostics.export(m.report); break;
     case 'instrument-rejected':
@@ -385,7 +389,7 @@ function handleRelay(from, payload) {
   }
 }
 
-function send(obj) { Net.send(obj); }
+function send(obj) { Extras.capture(obj); Net.send(obj); }
 function pushState(patch) { Net.send({ t: 'state', patch }); }
 
 /** Fast burst of exchanges on join, then a steady trickle that feeds the skew fit. */
@@ -643,8 +647,9 @@ function wireMap() {
 /* ─────────────────────────────────── UI ────────────────────────────────── */
 
 function show(which) {
-  $('#landing').hidden = which !== 'landing';
-  $('#session').hidden = which !== 'session';
+  if (which === 'landing') { Extras.stop(); Timing.cancel(); App.room=null; App.connected=false; Desk.open(); }
+  Desk.refresh();
+  if (which === 'session' && innerWidth < 1100) Desk.close();
 }
 function showGate() { $('#gate').hidden = false; }
 function landingError(msg) {
@@ -772,6 +777,7 @@ function renderRoom() {
   renderDevices();
   Instrument.render();
   Stage.render();
+  Desk.refresh();
 }
 
 function renderDevices() {
@@ -1457,6 +1463,8 @@ wireTabs();
 Instrument.init();
 Stage.init();
 Diagnostics.init();
+Extras.init();
+Desk.init();
 renderModes();
 syncSelfControls();
 $$('input[type=range]').forEach(fillRange);

@@ -1,0 +1,30 @@
+/* Functional console: the performance surface stays primary; room management is lateral. */
+#desk-controls { border:0; padding:0; margin:0; min-width:0; }
+#desk-controls:disabled { opacity:.6; }
+#desk-intro { max-width:64ch; color:var(--text-2); }
+#room-panel { position:fixed; z-index:50; top:0; right:0; bottom:0; width:min(360px,100%); padding:24px; overflow:auto; background:var(--bg-elev); border-left:1px solid var(--hairline); }
+.panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.panel-heading h2 { font-size:18px; }
+#room-panel #landing { min-height:0; height:auto; display:block; padding:16px 0; margin:0; width:auto; }
+#room-panel #landing[hidden], #room-panel[hidden] { display:none; }
+#room-panel .lede { font-size:16px; text-align:left; margin:0 0 24px; }
+#room-panel .start { width:100%; }
+#room-panel .invite { padding:20px 0; background:none; border:0; }
+#room-panel .invite-body { display:flex; flex-direction:column; align-items:stretch; }
+#room-panel .qr-frame { width:180px; height:180px; margin:auto; }
+#room-panel .invite-url { overflow-wrap:anywhere; }
+#room-panel input { font-size:16px; }
+.extensions { padding:24px 0; border-top:1px solid var(--hairline); }
+.extensions > p, .extension-block p { color:var(--text-2); max-width:78ch; }
+.extension-block { padding:18px 0; border-bottom:1px solid var(--hairline); }
+.extension-block > label { font-size:16px; font-weight:600; min-height:44px; }
+.extension-block .btn-row { flex-wrap:wrap; }
+.extension-block .btn, .extension-block select, #room-panel .btn { min-height:44px; }
+.extension-block .coordinate-row { max-width:360px; margin:16px 0; }
+.role-row { display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:16px; padding:10px 0; }
+.role-row label { display:flex; align-items:center; gap:10px; overflow-wrap:anywhere; }
+.role-row select { width:100%; min-width:0; }
+.playback-details .layout { grid-template-columns:1fr; grid-template-areas:"player" "devices" "panel"; }
+@media (min-width:1000px) { .playback-details .layout { grid-template-columns:1fr 1fr; grid-template-areas:"player panel" "devices panel"; } }
+@media (min-width:1100px) { body:has(#room-panel:not([hidden])) #session { margin-right:380px; max-width:calc(100% - 400px); } }
+@media (max-width:600px) { .extensions input, .extensions select { font-size:16px; } #room-panel { box-shadow:-12px 0 50px #0004; } }

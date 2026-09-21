@@ -16,6 +16,8 @@
   const spatial = typeof module === 'object' && module.exports ? require('./spatial.js') : Spatial;
   const showCore = typeof module === 'object' && module.exports ? require('./show-core.js') : ShowCore;
 
+  const ShowExtensions = typeof module === 'object' && module.exports ? require('./extensions-core.js') : globalThis.ShowExtensions;
+
   function makeCode(rand) {
     const r = rand || ((n) => Math.floor(Math.random() * n));
     return Array.from({ length: 4 }, () => CODE_ALPHABET[r(CODE_ALPHABET.length)]).join('');
@@ -52,13 +54,13 @@
       pos: null,            // { x, y } metres, from the acoustic room map
       posSource: null, instrumentReady: false, clockJitter: 0,
       noteLate: 0, notePlayed: 0, noteSlack: null,
-      metrics: {}, visualReady: false,
+      metrics: {}, visualReady: false, role: 'all', timingTrim: 0,
     };
   }
 
   function publicDevice(d) {
     return {
-      id: d.id, name: d.name, isHost: d.isHost, joinedAt: d.joinedAt,
+      id: d.id, name: d.name, role: d.role || 'all', timingTrim: d.timingTrim || 0, isHost: d.isHost, joinedAt: d.joinedAt,
       mode: d.mode, volume: d.volume, muted: d.muted, trim: d.trim,
       rtt: d.rtt, ready: d.ready, progress: d.progress, drift: d.drift, skew: d.skew,
       calib: d.calib, battery: d.battery, charging: d.charging, net: d.net,
@@ -115,6 +117,7 @@
       device.muted = previous.muted;
       device.trim = previous.trim;
       device.calib = previous.calib;
+      device.role = previous.role || 'all'; device.timingTrim = previous.timingTrim || 0;
       device.pos = previous.pos;
       device.posSource = previous.posSource;
       device.name = previous.name;
@@ -129,6 +132,7 @@
     const d = room.devices.get(id);
     if (!d) return null;
     room.devices.delete(id);
+    if (room.hostId === id) { room.calibrationUntil = 0; room.calibrationRun = null; }
     if (room.hostId !== id || room.devices.size === 0) return null;
     const next = [...room.devices.values()].sort((a, b) => a.joinedAt - b.joinedAt)[0];
     next.isHost = true;
@@ -204,13 +208,18 @@
     }
 
     if (!isHost) return false;      // everything below is the host's privilege
+    if (room.calibrationUntil > ctx.now() && ['play', 'metronome', 'live', 'instrument-mode'].includes(msg.t)) return false;
 
     switch (msg.t) {
       case 'show-config': {
         const patch = showCore.config(msg.patch);
-        const timingChanged = ['bpm', 'beats', 'a', 'b', 'path', 'metronome'].some((k) => k in patch && patch[k] !== room.show[k]);
+        if (patch.calibrationEnabled === false) {
+          room.calibrationUntil = 0; room.calibrationRun = null;
+          ctx.broadcast({ t: 'timing-cancel' });
+        }
+        const timingChanged = ['bpm', 'beats', 'a', 'b', 'path', 'metronome', 'rolesEnabled', 'calibrationEnabled'].some((k) => k in patch && patch[k] !== room.show[k]) || (patch.gesturesEnabled === false && room.show.gesturesEnabled);
         Object.assign(room.show, patch);
-        if (timingChanged && room.show.running) {
+        if (timingChanged) {
           room.show.anchor = ctx.now() + Math.max(600, room.show.lead + 200);
           room.show.revision++;
           ctx.broadcast({ t: 'instrument-panic', seq: ++room.instrumentSeq });
@@ -219,6 +228,8 @@
         return true;
       }
       case 'show-run': {
+        if (msg.on && room.calibrationUntil > ctx.now()) return false;
+        if (!msg.on && room.calibrationRun) { room.calibrationUntil = 0; room.calibrationRun = null; ctx.broadcast({t:'timing-cancel'}); }
         room.show.running = !!msg.on;
         room.show.anchor = ctx.now() + Math.max(600, room.show.lead + 200);
         room.show.revision++;
@@ -228,6 +239,44 @@
         ctx.broadcast({ t: 'playback', playback: room.playback, serverNow: ctx.now() });
         return true;
       }
+      case 'timing-begin': {
+        if (!room.show.calibrationEnabled || room.show.running || room.playback.mode !== 'idle' || typeof msg.run !== 'string' || msg.run.length > 64) return false;
+        room.calibrationRun = msg.run; room.calibrationUntil = ctx.now() + 180000;
+        ctx.send(device.id, { t: 'timing-ack', run: msg.run });
+        return false;
+      }
+      case 'timing-chirp': {
+        const target = room.devices.get(msg.id);
+        if (room.show.rolesEnabled && target?.role === 'visual') return false;
+        if (!room.show.calibrationEnabled || room.calibrationRun !== msg.run || !(room.calibrationUntil > ctx.now()) || !target?.instrumentReady || target.muted || !Number.isFinite(msg.at) || msg.at < ctx.now() + 100 || msg.at > ctx.now() + 2500) return false;
+        if (room.lastChirp && ctx.now() - room.lastChirp < 900) return false;
+        room.lastChirp = ctx.now();
+        ctx.send(target.id, { t: 'timing-chirp', run: msg.run, at: msg.at });
+        return false;
+      }
+      case 'timing-end':
+        if (msg.run !== room.calibrationRun) return false;
+        room.calibrationUntil = 0; room.calibrationRun = null;
+        ctx.broadcast({ t: 'timing-cancel' });
+        return false;
+      case 'timing-apply': {
+        if (!room.show.calibrationEnabled || room.show.running || room.playback.mode !== 'idle' || !Array.isArray(msg.results) || msg.results.length < 2 || msg.results.length > 12) return false;
+        const seen = new Set();
+        for (const r of msg.results) {
+          if (!r || typeof r !== 'object') return false;
+          const d = room.devices.get(r.id);
+          if (!d || seen.has(r.id) || !Number.isFinite(r.offset) || r.offset < 0 || r.offset > 500 || !spatial.position(r.pos) || !d.pos || d.pos.x !== r.pos.x || d.pos.y !== r.pos.y) return false;
+          seen.add(r.id);
+        }
+        for (const d of room.devices.values()) d.timingTrim = 0;
+        for (const r of msg.results) room.devices.get(r.id).timingTrim = r.offset;
+        showCore.log(room, ctx.now(), 'timing-calibration', `${msg.results.length} reference-microphone offsets applied`);
+        return true;
+      }
+      case 'timing-reset':
+        if (room.playback.mode !== 'idle') return false;
+        for (const d of room.devices.values()) d.timingTrim = 0;
+        return true;
       case 'visual-cue': {
         if (!Number.isFinite(msg.at) || msg.at < ctx.now() - 50 || msg.at > ctx.now() + 2000) return false;
         if (device.cueAt && ctx.now() - device.cueAt < 100) return false;
@@ -253,7 +302,8 @@
         return true;
       }
       case 'instrument-note': {
-        if (room.playback.mode !== 'instrument') return false;
+        if (room.playback.mode !== 'instrument' || room.calibrationUntil > ctx.now()) return false;
+        if (msg.replay && !room.show.gesturesEnabled) return false;
         const event = spatial.note(msg);
         if (!event) return false;
         if (event.at < ctx.now() + 5 || event.at > ctx.now() + 1500) {
@@ -263,14 +313,18 @@
         // Bound work on every phone even if a controller floods the room.
         if (!device.noteWindow || ctx.now() - device.noteWindow.at >= 1000) device.noteWindow = { at: ctx.now(), count: 0 };
         if (++device.noteWindow.count > 40) return false;
-        event.gains = spatial.gains([...room.devices.values()], event.pos, event.spread);
-        event.visualGains = spatial.gains([...room.devices.values()].map((d) => ({ ...d, muted: false, instrumentReady: d.visualReady })), event.pos, event.spread);
+        const participants = [...room.devices.values()];
+        const routed = d => !room.show.rolesEnabled || ShowExtensions.accepts(d.role, msg.lane);
+        event.gains = spatial.gains(participants.filter(routed), event.pos, event.spread);
+        if (room.show.rolesEnabled) event.parts = Object.fromEntries(participants.filter(d => d.role === 'bass').map(d => [d.id, { midi: Math.max(36, event.midi - 12), voice: 'sine' }]));
+        event.visualGains = spatial.gains(participants.filter(d => routed(d) || d.role === 'visual').map((d) => ({ ...d, muted: false, instrumentReady: d.visualReady })), event.pos, event.spread);
         event.palette = Object.hasOwn(showCore.COLORS, msg.palette) ? msg.palette : room.show.palette;
         event.lane = Number.isInteger(msg.lane) ? Math.max(0, Math.min(2, msg.lane)) : null;
         ctx.broadcast({ ...event, t: 'instrument-note', seq: ++room.instrumentSeq });
         return false; // No full roster broadcast on the performance path.
       }
       case 'instrument-panic':
+        if (room.calibrationRun) { room.calibrationUntil = 0; room.calibrationRun = null; ctx.broadcast({t:'timing-cancel'}); }
         room.show.running = false;
         room.show.revision++;
         ctx.broadcast({ t: 'instrument-panic', seq: ++room.instrumentSeq });
@@ -350,6 +404,7 @@
         const target = room.devices.get(msg.id);
         if (!target) return false;
         const patch = {};
+        if (ShowExtensions.ROLES.includes(msg.role)) target.role = msg.role;
         if (msg.pos === null || spatial.position(msg.pos)) {
           target.pos = spatial.position(msg.pos);
           target.posSource = target.pos ? (msg.posSource === 'acoustic' ? 'acoustic' : 'manual') : null;

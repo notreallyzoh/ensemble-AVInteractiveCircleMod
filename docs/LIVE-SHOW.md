@@ -12,6 +12,18 @@ Everyone opens the same site, joins the host's four-letter room and taps to enab
 6. Use the host's keyboard/pads or spatial surface for live gestures. Phone previews and map nodes show scheduled visual activity. A separate cue can light one screen or the whole crowd even without a note.
 7. **Stop** cancels queued synthesis; **Blackout screens** leaves audio playing. Each participant retains local mute, brightness and reduced-motion controls.
 
+## Optional performance tools
+
+The host control desk opens immediately. **Room & sharing** opens its side panel for creating a room, joining one, and sharing its QR code. On phones the panel closes after joining. Performance controls remain disabled until a room is connected.
+
+All three options below start **unchecked** for every new room. They are host-controlled and independent.
+
+- **Record spatial gestures:** Start the instrument, enable this option, then record pad/keyboard/sound-field notes. Finish recording and replay the phrase, optionally looping it. The phrase stores positions, pitches, voices, spread, duration and velocity; it is limited to 60 seconds/256 notes and saved only in this browser. Disabling the feature or using silence stops replay. It does not record the automatic polyrhythm or microphone audio.
+- **Assign musical roles to groups:** Select phones and assign one role together, or change each role individually. Full ensemble receives everything. Melody follows Lane A and manual gestures. Bass follows the same material one octave lower with a sine voice. Pulse follows Lane B and the audible metronome. Visual-only nodes keep light cues without instrument audio. With the checkbox off, the normal full-ensemble routing returns; saved assignments are ignored.
+- **Microphone timing calibration:** Stop all sound, place 2–12 unmuted audio-ready speakers, enter the reference microphone's room coordinates, then press Measure on the laptop. Only that button requests microphone permission. Keep the microphone and phones still while three chirps per speaker are measured. At least two confident detections with no more than 15 ms spread are required per speaker. The calculation subtracts mapped sound-travel distance, retains manual trims, and estimates extra delay for faster speakers relative to the slowest. Review the results and explicitly apply them. Offsets affect the Tone.js instrument only; disabling the checkbox bypasses them, and Clear offsets removes them. Microphone audio is processed locally and discarded when capture ends.
+
+Calibration is experimental: a shared microphone avoids comparing unrelated input delays, but echoes, unknown microphone processing and inaccurate coordinates can bias estimates. Its confidence threshold is a chirp detection heuristic, not a certified accuracy estimate. Test with real devices and listen after applying results. Existing live-stream calibration and acoustic mapping remain separate; finish one measurement before starting another. Changing routing/calibration options cancels queued instrument notes to prevent old settings from sounding after the change.
+
 ## Diagnostics accessible from this chat
 
 Tell the assistant your room code and ask it to inspect the current test. This workspace can run:

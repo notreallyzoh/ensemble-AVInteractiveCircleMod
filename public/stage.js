@@ -213,7 +213,7 @@ const Stage = {
     $('#stage-local-brightness').addEventListener('input', (e) => { this.localBrightness = Number(e.target.value); });
     $('#show-run').addEventListener('click', () => {
       if (!isHost() || !Clock.ready) return;
-      if (Live.sending || Ranger.running) { toast('Stop streaming or finish mapping first'); return; }
+        if (Live.sending || Ranger.running || Timing.running) { toast('Stop streaming or finish microphone measurements first'); return; }
       if (!App.room.devices.some((d) => d.pos && d.instrumentReady)) { toast('Place an enabled phone first'); return; }
       Diagnostics.stopTest(); send({ t: 'show-run', on: true });
     });

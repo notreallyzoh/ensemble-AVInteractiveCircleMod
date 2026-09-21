@@ -54,7 +54,7 @@ const Diagnostics = {
   },
   startTest() {
     if (!isHost() || !Clock.ready) return;
-    if (Live.sending || Ranger.running) { toast('Stop streaming or finish mapping before soundcheck'); return; }
+    if (Live.sending || Ranger.running || Timing.running) { toast('Stop streaming or finish microphone measurements before soundcheck'); return; }
     if (!App.room.devices.some((d) => d.pos && d.instrumentReady)) { toast('Place and enable the phones first'); return; }
     if (this.testing) { this.stopTest(); return; }
     send({ t: 'instrument-mode', on: true });

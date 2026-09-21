@@ -16,6 +16,8 @@
 const SPEED_OF_SOUND = 343;     // m/s at ~20 °C
 
 const Acoustic = {
+  emissions: new Set(),
+  cancelEmissions() { for (const src of this.emissions) { try { src.stop(); } catch {} } this.emissions.clear(); },
   worklet: null, stream: null, node: null, src: null, sink: null,
   capturing: null, template: null, chirpBuf: null, busy: false,
 
@@ -72,6 +74,7 @@ const Acoustic = {
   },
 
   close() {
+    this.finishCapture(); this.cancelEmissions();
     try { this.node && this.node.port.postMessage({ on: false }); } catch {}
     try { this.src && this.src.disconnect(); this.node && this.node.disconnect(); this.sink && this.sink.disconnect(); } catch {}
     try { this.stream && this.stream.getTracks().forEach((t) => t.stop()); } catch {}
@@ -145,6 +148,7 @@ const Acoustic = {
     const g = this.ctx.createGain();
     g.gain.value = gain;
     src.connect(g); g.connect(this.ctx.destination);   // bypass channel modes and volume
+    this.emissions.add(src); src.onended = () => { this.emissions.delete(src); src.disconnect(); g.disconnect(); };
     src.start(when);
     return true;
   },

@@ -10,7 +10,7 @@
   function defaults() {
     return { running: false, anchor: 0, revision: 0, bpm: 96, beats: 4, a: 3, b: 4,
       lead: 150, master: 0.7, brightness: 0.65, style: 'bloom', palette: 'ocean',
-      path: 'orbit', autoGuard: true, blackout: false, metronome: false };
+      path: 'orbit', autoGuard: true, blackout: false, metronome: false, gesturesEnabled: false, rolesEnabled: false, calibrationEnabled: false };
   }
   function config(input) {
     const p = input || {}, out = {};
@@ -18,7 +18,7 @@
       ['bpm', 30, 180, true], ['beats', 1, 8, true], ['a', 1, 12, true], ['b', 1, 12, true],
       ['lead', 40, 1000, true], ['master', 0, 1], ['brightness', 0, 1],
     ]) if (finite(p[key])) out[key] = round ? Math.round(bound(p[key], lo, hi)) : bound(p[key], lo, hi);
-    for (const key of ['autoGuard', 'blackout', 'metronome']) if (typeof p[key] === 'boolean') out[key] = p[key];
+    for (const key of ['autoGuard', 'blackout', 'metronome', 'gesturesEnabled', 'rolesEnabled', 'calibrationEnabled']) if (typeof p[key] === 'boolean') out[key] = p[key];
     if (['bloom', 'rings', 'ribbons'].includes(p.style)) out.style = p.style;
     if (Object.hasOwn(COLORS, p.palette)) out.palette = p.palette;
     if (['orbit', 'sweep', 'still'].includes(p.path)) out.path = p.path;
@@ -78,7 +78,7 @@
     const devices = room.devices instanceof Map ? [...room.devices.values()] : room.devices || [];
     return { version: 1, generatedAt: new Date().toISOString(), clockNow: now, code: room.code,
       mode: room.playback.mode, show: room.show || defaults(), recommendation: recommend(room),
-      devices: devices.map((d) => ({ id: d.id, name: d.name, isHost: d.isHost, pos: d.pos,
+      devices: devices.map((d) => ({ id: d.id, name: d.name, isHost: d.isHost, pos: d.pos, role: d.role || 'all', timingTrim: d.timingTrim || 0,
         muted: d.muted, volume: d.volume, trim: d.trim, ready: d.instrumentReady, awake: d.awake,
         battery: d.battery, timestampSource: d.tsrc, metrics: d.metrics || {}, lastSeen: d.lastSeen })),
       events: room.diagnosticEvents || [],

@@ -70,12 +70,12 @@ const Instrument = {
     this.sequence = event.seq;
     if (event.t === 'instrument-panic') { this.silence(); return; }
     if (!this.active() || !Clock.ready || !App.connected || document.hidden || !this.prepare()) return;
-    const note = Spatial.note(event);
+    const note = Spatial.note({ ...event, ...(event.parts?.[App.id] || {}) });
     if (!note) return;
     const gain = event.gains && event.gains[App.id];
     if (Number.isFinite(gain) && gain > 0.001 && !App.muted) {
       this.makeVoices(note.voice);
-      const when = Engine.scheduleAt(note.at) + (App.trim - Spatial.GRAPH_LATENCY_MS) / 1000;
+      const when = Engine.scheduleAt(note.at) + (App.trim + (App.room?.show?.calibrationEnabled ? me()?.timingTrim || 0 : 0) - Spatial.GRAPH_LATENCY_MS) / 1000;
       const decision = Spatial.scheduleDecision(Engine.ctx.currentTime, when);
       this.slack = decision.slackMs;
       Diagnostics.margin(decision.slackMs);
@@ -265,8 +265,7 @@ const Instrument = {
   },
   init() {
     $('#invite-phones').addEventListener('click', () => {
-      $('.playback-details').open = true;
-      $('.invite').scrollIntoView({ block: 'center' });
+      Desk.open();
       $('#btn-copy').focus({ preventScroll: true });
     });
     $('#note-keys').replaceChildren(...this.notes.map((midi, i) => {

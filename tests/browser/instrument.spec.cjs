@@ -114,6 +114,7 @@ test('manual coordinates, keyboard playing, map import and existing file playbac
   await expect.poll(() => page.evaluate(() => Instrument.voices.size)).toBe(0);
   await page.locator('#invite-phones').click();
   await expect(page.locator('#qr svg')).toBeVisible();
+  await page.locator('.playback-details > summary').click();
   // A tiny generated PCM file makes the preserved legacy player test self-contained.
   const frames = 48000, wav = Buffer.alloc(44 + frames * 2);
   wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);

@@ -16,11 +16,18 @@ automatic timing guard. See [the show and diagnostics guide](docs/LIVE-SHOW.md)
 for the first-device test, Cloudflare deployment, chat-accessible reports and
 the next experiments.
 
+**Rehearse first:** choose **Rehearse without a room**, set 1–64 virtual phones,
+and press **Start simulation**. Hear a laptop stereo preview and watch the phone
+screens on the spatial map while playing notes, polyrhythms and light cues.
+**Go live → Create live room from rehearsal** carries the settings and planned
+positions/roles into a stopped room; arriving phones fill the planned slots.
+Simulation does not measure real device latency or room acoustics.
+
 ```bash
 node server.js
 ```
 
-1. Open **http://localhost:8080** on the host and choose **Start a session**.
+1. Open **http://localhost:8080** on the host and choose **Create room** in the side panel.
 2. Click **Invite phones**. On the same Wi-Fi, scan the QR or open the LAN URL
    printed in the terminal. Enter the room code and tap **Join**. Each phone
    needs its own audio activation; keep its page visible and screen awake.

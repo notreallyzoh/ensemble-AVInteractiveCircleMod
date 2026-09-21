@@ -1,6 +1,13 @@
 /* Functional console: the performance surface stays primary; room management is lateral. */
 #desk-controls { border:0; padding:0; margin:0; min-width:0; }
 #desk-controls:disabled { opacity:.6; }
+#simulation-tools { padding:16px 0; }
+#simulation-tools > label { font-weight:600; }
+.simulation-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:10px; }
+#simulation-count { width:90px; min-height:44px; font:inherit; }
+#simulation-tools p, #simulation-note, #simulation-transfer { color:var(--text-2); max-width:85ch; line-height:1.5; }
+#simulation-note, #simulation-transfer { border-left:3px solid var(--accent); padding-left:12px; }
+.map-phone-screen { display:block; width:30px; height:50px; border:2px solid #858c9a; border-radius:5px; box-sizing:border-box; background:#090b10; }
 #desk-intro { max-width:64ch; color:var(--text-2); }
 #room-panel { position:fixed; z-index:50; top:0; right:0; bottom:0; width:min(360px,100%); padding:24px; overflow:auto; background:var(--bg-elev); border-left:1px solid var(--hairline); }
 .panel-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }

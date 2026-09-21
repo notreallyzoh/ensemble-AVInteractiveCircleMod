@@ -42,8 +42,10 @@ const Instrument = {
       // defers voice allocation through JS timers, undesirable at short deadlines.
       this.voices.set(voice, Array.from({ length: 8 }, () => {
         const synth = new Synth({ ...options, context: this.context, volume: -14 });
-        synth.connect(this.limiter);
-        return { synth, availableAt: 0 };
+        const panner = Simulation.active ? new Tone.Panner(0) : null;
+        if (panner) { synth.connect(panner); panner.connect(this.limiter); }
+        else synth.connect(this.limiter);
+        return { synth, panner, availableAt: 0 };
       }));
     }
   },
@@ -56,7 +58,7 @@ const Instrument = {
   silence() {
     // Disposing cancels future attacks as well as ringing voices. releaseAll alone
     // would leave notes which were already scheduled ahead of the panic event.
-    for (const pool of this.voices.values()) for (const voice of pool) voice.synth.dispose();
+    for (const pool of this.voices.values()) for (const voice of pool) { voice.synth.dispose(); voice.panner?.dispose(); }
     this.voices.clear();
     this.drag = null;
     if ($('#field-pulses')) $('#field-pulses').replaceChildren();
@@ -70,27 +72,31 @@ const Instrument = {
     this.sequence = event.seq;
     if (event.t === 'instrument-panic') { this.silence(); return; }
     if (!this.active() || !Clock.ready || !App.connected || document.hidden || !this.prepare()) return;
-    const note = Spatial.note({ ...event, ...(event.parts?.[App.id] || {}) });
-    if (!note) return;
-    const gain = event.gains && event.gains[App.id];
-    if (Number.isFinite(gain) && gain > 0.001 && !App.muted) {
-      this.makeVoices(note.voice);
-      const when = Engine.scheduleAt(note.at) + (App.trim + (App.room?.show?.calibrationEnabled ? me()?.timingTrim || 0 : 0) - Spatial.GRAPH_LATENCY_MS) / 1000;
-      const decision = Spatial.scheduleDecision(Engine.ctx.currentTime, when);
-      this.slack = decision.slackMs;
-      Diagnostics.margin(decision.slackMs);
-      if (!decision.play) this.late++;
-      else {
-        const hz = 440 * 2 ** ((note.midi - 69) / 12);
-        const slot = this.voices.get(note.voice).find((voice) => voice.availableAt <= when);
-        if (slot) {
-          slot.synth.triggerAttackRelease(hz, note.duration, when, note.velocity * gain);
-          slot.availableAt = when + note.duration + (note.voice === 'bell' ? 0.55 : 0.3);
-          this.played++;
-        } else this.overload = (this.overload || 0) + 1;
+    const monitor = Simulation.active ? Simulation.monitor(event) : [{ note: { ...event, ...(event.parts?.[App.id] || {}) }, gain: event.gains?.[App.id], pan: 0 }];
+    for (const part of monitor) {
+      const note = Spatial.note(part.note);
+      if (!note) return;
+      const gain = part.gain;
+      if (Number.isFinite(gain) && gain > 0.001 && !App.muted) {
+        this.makeVoices(note.voice);
+        const when = Engine.scheduleAt(note.at) + (App.trim + (App.room?.show?.calibrationEnabled ? me()?.timingTrim || 0 : 0) - Spatial.GRAPH_LATENCY_MS) / 1000;
+        const decision = Spatial.scheduleDecision(Engine.ctx.currentTime, when);
+        this.slack = decision.slackMs;
+        Diagnostics.margin(decision.slackMs);
+        if (!decision.play) this.late++;
+        else {
+          const hz = 440 * 2 ** ((note.midi - 69) / 12);
+          const slot = this.voices.get(note.voice).find((voice) => voice.availableAt <= when);
+          if (slot) {
+            slot.panner?.pan.setValueAtTime(part.pan, when);
+            slot.synth.triggerAttackRelease(hz, note.duration, when, note.velocity * gain);
+            slot.availableAt = when + note.duration + (note.voice === 'bell' ? 0.55 : 0.3);
+            this.played++;
+          } else this.overload = (this.overload || 0) + 1;
+        }
       }
+      if (!isHost()) { this.source = note.pos; this.drawSource(note.spread); }
     }
-    if (!isHost()) { this.source = note.pos; this.drawSource(note.spread); }
     
     this.renderHealth();
   },
@@ -191,6 +197,9 @@ const Instrument = {
     $('#metre-grid path').setAttribute('d', `M${gridSize} 0H0V${gridSize}`);
     const ns = 'http://www.w3.org/2000/svg';
     const unitsPerPixel = 600 / Math.max(1, $('#sound-field').getBoundingClientRect().width);
+    const mapSignature = JSON.stringify([this.halfSpan, unitsPerPixel, this.drag, App.room.devices.map(d => [d.id, d.name, d.pos, d.instrumentReady, d.muted])]);
+    if (mapSignature === this.mapSignature) { this.drawSource(); return; }
+    this.mapSignature = mapSignature;
     const nodes = App.room.devices.flatMap((d, i) => {
       if (!d.pos) return [];
       const p = this.point(this.drag && this.drag.id === d.id ? this.drag.pos : d.pos);
@@ -207,7 +216,13 @@ const Instrument = {
       number.style.fontSize = `${Math.max(18, 14 * unitsPerPixel)}px`;
       name.style.fontSize = `${Math.max(13, 12 * unitsPerPixel)}px`;
       name.setAttribute('y', Math.max(41, 32 * unitsPerPixel));
-      group.append(title, hit, circle, number, name); return [group];
+      group.append(title, hit, circle, number, name);
+      const screen = document.createElementNS(ns, 'foreignObject');
+      screen.setAttribute('x', '-15'); screen.setAttribute('y', '-25'); screen.setAttribute('width', '30'); screen.setAttribute('height', '50');
+      screen.style.pointerEvents = 'none';
+      const canvas = document.createElement('canvas'); canvas.className = 'map-phone-screen';
+      canvas.setAttribute('aria-label', `${d.name} screen preview`); screen.append(canvas); group.append(screen);
+      return [group];
     });
     $('#field-speakers').replaceChildren(...nodes);
     this.drawSource();

@@ -17,6 +17,7 @@ const Diagnostics = {
       hidden: document.hidden, fullscreen: !!document.fullscreenElement || Stage.inStage, reducedMotion: Stage.soft };
   },
   guard() {
+    if (Simulation.active) return;
     if (!App.room || !isHost() || !Clock.ready || !App.connected) return;
     const show = Stage.show(), recommendation = ShowCore.recommend(App.room);
     if (!show.autoGuard || (!Instrument.active() && !this.testing) || performance.now() - this.lastGuard < 4000) return;

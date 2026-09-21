@@ -248,6 +248,7 @@ function toast(msg, ms = 2800) {
 /* ───────────────────────────────── network ─────────────────────────────── */
 
 async function connectRoom(opts) {
+  Simulation.prepareLive(opts.create);
   Net.onMessage = handleMessage;
   Net.onStatus = (status) => {
     if (status === 'connected') { App.connected = true; pumpSync(true); }
@@ -292,8 +293,9 @@ function handleMessage(m) {
       renderShare();
       if (!Engine.unlocked()) showGate();
       pushState({ mode: App.mode, volume: App.volume, trim: App.trim });
+      Simulation.applyDraft(true);
       break;
-    case 'roster': applyRoom(m.room); break;
+    case 'roster': applyRoom(m.room); Simulation.applyDraft(); break;
     case 'instrument-note':
     case 'instrument-panic': if (m.t === 'instrument-panic') { Extras.replaying=false; if (Extras.recording) Extras.stop(); Extras.status(); } Stage.receive(m); Instrument.receive(m); break;
     case 'timing-ack': if (m.run === Timing.run) Timing.ack?.(true); break;
@@ -530,6 +532,7 @@ function loadQR() {
 }
 
 async function renderShare() {
+  if (Simulation.active) return;
   if (!App.room) return;
   const url = shareUrl();
   $('#invite-code').textContent = App.room.code;
@@ -1210,7 +1213,7 @@ function wireLanding() {
   }
 
   Net.detectMode().then((mode) => {
-    Net.mode = mode;
+    if (!Simulation.active) Net.mode = mode;
     $('#landing-note').textContent = mode === 'p2p'
       ? 'Peer to peer — devices connect straight to the host. Nothing is uploaded to a server.'
       : Net.info?.cloud ? 'Cloudflare room — join from any phone. Keep everyone on reliable Wi-Fi.' : 'Local network — this machine is running the session server.';
@@ -1465,6 +1468,7 @@ Stage.init();
 Diagnostics.init();
 Extras.init();
 Desk.init();
+Simulation.init();
 renderModes();
 syncSelfControls();
 $$('input[type=range]').forEach(fillRange);

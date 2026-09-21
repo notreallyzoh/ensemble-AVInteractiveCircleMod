@@ -68,17 +68,21 @@ const Stage = {
     if (this.inStage) this.paint($('#stage-canvas'), this.activity.get(App.id), now, show, true);
     if (isHost()) {
       this.drawRhythm(now, show);
+      const nodes = new Map([...$('#field-speakers').children].map(el => [el.dataset.speaker, el]));
+      const previews = new Map([...$('#phone-wall').children].map(el => [el.dataset.id, el]));
       for (const d of App.room.devices) {
         const cue = this.activity.get(d.id);
         const level = this.level(cue, now, show);
-        const node = [...$('#field-speakers').children].find((g) => g.dataset.speaker === d.id);
+        const node = nodes.get(d.id);
         if (node) {
+          const screen = node.querySelector('canvas');
+          if (screen) this.paint(screen, cue, now, show, false);
           const circle = node.querySelector('.speaker-dot');
           circle.style.fill = level > 0.01 ? (ShowCore.COLORS[cue.palette] || ShowCore.COLORS.ocean) : '';
           circle.style.fillOpacity = level > 0.01 ? 0.15 + level * 0.85 : '';
           circle.style.strokeWidth = level > 0.01 ? 2 + level * 6 : '';
         }
-        const preview = [...$('#phone-wall').children].find((el) => el.dataset.id === d.id);
+        const preview = previews.get(d.id);
         if (preview) this.paint(preview.querySelector('canvas'), cue, now, show, false);
       }
     }

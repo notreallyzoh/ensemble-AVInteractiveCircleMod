@@ -6,13 +6,17 @@ const Desk = {
   refresh() {
     if(!this.ready) return;
     const joined=!!App.room && App.connected;
-    $('#session').hidden=false; $('#landing').hidden=joined; $('.invite').hidden=!joined;
+    const live=joined && !Simulation.active;
+    $('#session').hidden=false; $('#landing').hidden=live; $('.invite').hidden=!live;
     $('#desk-controls').disabled=!joined;
     $('#desk-intro').hidden=joined;
-    $('#room-panel-title').textContent=joined ? `Room ${App.room.code}` : 'Create or join a room';
+    $('#room-panel-title').textContent=live ? `Room ${App.room.code}` : Simulation.active ? 'Ready for your audience?' : 'Create or join a room';
+    $('#btn-host').textContent=Simulation.active ? 'Create live room from rehearsal' : 'Create room';
     $('#btn-leave').hidden=!joined; $('#enter-stage').hidden=!joined; $('#sync-pill').hidden=!joined; $('#invite-phones').hidden=!joined;
+    $('#invite-phones').textContent=Simulation.active ? 'Go live' : 'Invite phones';
     if(!App.room) { $('#show-desk').hidden=false; $('#diagnostics-panel').hidden=true; $('#show-title').textContent='Ensemble control desk'; }
     Extras.render();
+    Simulation.refresh();
   },
   init() {
     const panel=document.createElement('aside');panel.id='room-panel';panel.setAttribute('aria-labelledby','room-panel-title');
@@ -24,7 +28,7 @@ const Desk = {
     $('#btn-host').textContent='Create room';
     const toggle=document.createElement('button');toggle.id='room-panel-toggle';toggle.className='btn primary';toggle.textContent='Room & sharing';toggle.setAttribute('aria-controls','room-panel');toggle.setAttribute('aria-expanded','true');toggle.addEventListener('click',()=>panel.hidden?this.open():this.close());
     $('.topbar').insertBefore(toggle,$('#invite-phones'));
-    const intro=document.createElement('p');intro.id='desk-intro';intro.textContent='Your control desk is ready. Create a room in the side panel to enable sound and invite phones.';$('.topbar').after(intro);
+    const intro=document.createElement('p');intro.id='desk-intro';intro.textContent='Rehearse your show with virtual phones, or create a room in the side panel to invite your ensemble.';$('.topbar').after(intro);
     const controls=document.createElement('fieldset');controls.id='desk-controls';controls.setAttribute('aria-label','Performance controls');
     for(const child of [...$('#session').children]) if(child!==$('.topbar')&&child!==intro) controls.append(child);
     $('#session').append(controls);this.ready=true;this.refresh();

@@ -51,7 +51,7 @@ const Extras = {
     if (!this.enabled('gesturesEnabled') && (this.recording || this.replaying)) this.stop();
     if ((!this.enabled('calibrationEnabled') || !isHost()) && Timing.running) Timing.cancel();
     if (!App.room) return;
-    $('.playback-details').inert = Timing.running;
+    $('.playback-details').inert = Timing.running || Simulation.active;
     $('#timing-reset').disabled = Timing.running || playback().mode !== 'idle';
     const signature = App.room.devices.map(d => `${d.id}:${d.name}`).join('|');
     if (signature !== this.roleSignature) {

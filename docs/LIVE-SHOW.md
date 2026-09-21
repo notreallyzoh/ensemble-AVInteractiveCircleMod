@@ -64,3 +64,13 @@ To test the cloud runtime locally: `npm run dev:cloud`, then set `TEST_URL=http:
 - Measure battery/network/load at increasing crowd sizes before attempting large public performances.
 
 References: [Cloudflare hibernating WebSockets](https://developers.cloudflare.com/durable-objects/best-practices/websockets/), [Worker static assets](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/), [Fullscreen API](https://developer.mozilla.org/en-US/docs/Web/API/Fullscreen_API), [Tone.js](https://tonejs.github.io/).
+
+## Rehearse before inviting people
+
+Choose **Rehearse without a room**, enter **1–64** virtual phones, and press **Start simulation**. No room is created and no WebSocket or peer connection is opened. The instrument is ready immediately: play the note pads, start the polyrhythm, send screen cues, assign optional musical roles, or record and replay a spatial phrase.
+
+The spatial map contains animated phone screens driven by the same scheduled cues as the phone wall. Use **Place speakers** to drag their positions. Changing the count stops playback and rebuilds the arrangement (circle for up to 16 phones, grid above that). Your show settings and existing roles remain; removed phone slots are discarded.
+
+The laptop previews all virtual speakers as a bounded stereo power mix, including bass parts and visual-only roles. It is a composition preview, not a model of phone loudness, network latency, microphone offsets or room acoustics. Real-device diagnostics, automatic timing guard, microphone calibration and legacy track/stream tools remain for live sessions.
+
+When satisfied, choose **Go live → Create live room from rehearsal**. Tempo, rhythm, screen style, brightness, enabled creative tools and the planned phone positions/roles carry over. The show remains stopped. Phones fill planned slots in join order; the laptop stays unplaced, and additional phones require manual placement. Check the assigned positions against where people actually stand before starting. Recorded gestures remain in the host browser. Refreshing closes the rehearsal and its unsaved layout.
